@@ -1,0 +1,593 @@
+#Name: Samarth Sarin, 
+
+from flask import Flask, render_template
+import pymysql
+import bcrypt
+
+app = Flask(__name__)
+app.config['STATIC_FOLDER'] = 'static'
+
+# Database Connection Details
+host = 'localhost'
+username = 'root'
+password = 'your_password'#add password
+port = 36000
+dbName = 'RestaurantsDB'
+
+def create_connection(with_db=True):
+    try:
+        if with_db:
+            return pymysql.connect(host=host, user=username, password=password, port=port, database=dbName, autocommit=True)
+        else:
+            return pymysql.connect(host=host, user=username, password=password, port=port, autocommit=True)
+    except pymysql.MySQLError as e:
+        print(f"Error connecting to the MySQL Database: {e}")
+        return None
+
+def initialize_database():
+    conn = create_connection(with_db=False)
+    if conn is None:
+        print("Failed to connect to MySQL.")
+        return
+
+    try:
+        with conn.cursor() as cursor:
+            # Execute table creation queries
+            cursor.execute(f"CREATE DATABASE IF NOT EXISTS RestaurantsDB")
+            cursor.execute(f"USE RestaurantsDB")
+
+            # Create the Cuisine table
+            create_cuisine_table_query = """
+            CREATE TABLE IF NOT EXISTS Cuisine (
+                CuisineID INT PRIMARY KEY AUTO_INCREMENT,
+                CuisineType VARCHAR(255),
+                DefaultCuisineID INT DEFAULT 1
+            );
+            """
+            cursor.execute(create_cuisine_table_query)
+
+            # Insert cuisines
+            insert_cuisine_data_query = """
+            INSERT INTO Cuisine (CuisineType) VALUES
+                ('Pub Style'),
+                ('Spain and the Mediterranean'),
+                ('Bar Style'),
+                ('Cafe');
+            """
+            cursor.execute(insert_cuisine_data_query)
+
+            # Create the User table
+            create_user_table_query = """
+            CREATE TABLE IF NOT EXISTS User (
+                UserID INT PRIMARY KEY,
+                Username VARCHAR(255) UNIQUE,
+                Password VARCHAR(255),
+                Email VARCHAR(255)
+            );
+            """
+            cursor.execute(create_user_table_query)
+
+            # Create the Restaurant table
+            create_restaurant_table_query = """
+            CREATE TABLE IF NOT EXISTS restaurant (
+                RestaurantID INT PRIMARY KEY,
+                Name VARCHAR(255),
+                CuisineID INT,
+                Location VARCHAR(255),
+                ContactNumber VARCHAR(20),
+                ImagePath VARCHAR(255),
+                FOREIGN KEY (CuisineID) REFERENCES Cuisine(CuisineID)
+            );
+            """
+            cursor.execute(create_restaurant_table_query)
+
+            # Create the Feedback table
+            create_feedback_table_query = """
+            CREATE TABLE IF NOT EXISTS Feedback (
+                FeedbackID INT PRIMARY KEY,
+                RestaurantID INT,
+                UserID INT,
+                CuisineID INT DEFAULT 1,
+                Content TEXT,
+                Stars INT,
+                FOREIGN KEY (RestaurantID) REFERENCES Restaurant(RestaurantID),
+                FOREIGN KEY (UserID) REFERENCES User(UserID),
+                FOREIGN KEY (CuisineID) REFERENCES Cuisine(CuisineID)
+            );
+            """
+            cursor.execute(create_feedback_table_query)
+
+            # Create the Review table
+            create_review_table_query = """
+            CREATE TABLE IF NOT EXISTS Review (
+                ReviewID INT PRIMARY KEY,
+                RestaurantID INT,
+                UserID INT,
+                Content TEXT,
+                FOREIGN KEY (RestaurantID) REFERENCES Restaurant(RestaurantID),
+                FOREIGN KEY (UserID) REFERENCES User(UserID)
+            );
+            """
+            cursor.execute(create_review_table_query)
+
+            # Create the Rating table
+            create_rating_table_query = """
+            CREATE TABLE IF NOT EXISTS Rating (
+                RatingID INT PRIMARY KEY,
+                RestaurantID INT,
+                UserID INT,
+                Stars INT,
+                ReviewID INT,
+                FOREIGN KEY (RestaurantID) REFERENCES Restaurant(RestaurantID),
+                FOREIGN KEY (UserID) REFERENCES User(UserID),
+                FOREIGN KEY (ReviewID) REFERENCES Review(ReviewID)
+            );
+            """
+            cursor.execute(create_rating_table_query)
+
+    except pymysql.MySQLError as e:
+        print(f"An error occurred during database initialization: {e}")
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+    return pymysql.connect(host=host, user=username, password=password, port=port, database=dbName, autocommit=True)
+
+def hash_password(password):
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed_password
+
+def validate_input(user_id, username, password, email):
+    return user_id and username and password and email
+
+# Function to remove data from the User table
+def remove_user_data(user_id):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            delete_query = "DELETE FROM User WHERE UserID = %s"
+            cursor.execute(delete_query, (user_id,))
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to remove data from the Cuisine table
+def remove_cuisine_data(cuisine_id):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            delete_query = "DELETE FROM Cuisine WHERE CuisineID = %s"
+            cursor.execute(delete_query, (cuisine_id,))
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to remove data from the Restaurant table
+def remove_restaurant_data(restaurant_id):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            delete_query = "DELETE FROM Restaurant WHERE RestaurantID = %s"
+            cursor.execute(delete_query, (restaurant_id,))
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to remove data from the Feedback table
+def remove_feedback_data(feedback_id):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            delete_query = "DELETE FROM Feedback WHERE FeedbackID = %s"
+            cursor.execute(delete_query, (feedback_id,))
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to update user password
+def update_user_password(user_id, new_password):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            update_query = "UPDATE User SET Password = %s WHERE UserID = %s"
+            hashed_password = hash_password(new_password)
+            cursor.execute(update_query, (hashed_password, user_id))
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to get average rating for a restaurant
+def get_average_rating(restaurant_id):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            average_query = "SELECT AVG(Stars) AS AverageRating FROM Rating WHERE RestaurantID = %s"
+            cursor.execute(average_query, (restaurant_id,))
+            result = cursor.fetchone()
+            return result['AverageRating']
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+def hash_password(password):
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed_password
+
+def validate_input(user_id, username, password, email):
+    if not user_id or not username or not password:
+        raise ValueError("Invalid input. All fields are required.")
+    # Add more validation checks as needed
+
+# Updated insert_user_data function
+def insert_user_data(user_id, username, password, email):
+    conn = create_connection()
+    if conn is None:
+        return "Error: Database connection failed."
+
+    try:
+        # Validation checks
+        if not all([user_id, username, password, email]):
+            return "Invalid input. All fields are required."
+
+        if not isinstance(user_id, int):
+            return "Invalid datatype for user_id. Please provide an integer."
+
+        if not isinstance(username, str) or not isinstance(password, str) or not isinstance(email, str):
+            return "Invalid datatype for username, password, or email. Please provide a string."
+
+        # Hash and salt the password
+        hashed_password = hash_password(password)
+
+        with conn.cursor() as cursor:
+            # Check if user already exists
+            check_query = "SELECT * FROM User WHERE UserID = %s"
+            cursor.execute(check_query, (user_id,))
+            existing_entry = cursor.fetchone()
+
+            if not existing_entry:
+                # Insert user data
+                insert_query = "INSERT INTO User (UserID, Username, Password, Email) VALUES (%s, %s, %s, %s)"
+                cursor.execute(insert_query, (user_id, username, hashed_password, email))
+                return "User data inserted successfully."
+            else:
+                return "UserID already exists."
+    except Exception as e:
+        return f"An unexpected error occurred: {e}"
+    finally:
+        conn.close()
+
+# Function to insert data into the Cuisine table
+def insert_cuisine_data(cuisine_type):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            # Check if the CuisineType already exists in the Cuisine table
+            check_query = "SELECT * FROM Cuisine WHERE CuisineType = %s"
+            cursor.execute(check_query, (cuisine_type,))
+            existing_entry = cursor.fetchone()
+
+            # If CuisineType doesn't exist, insert it
+            if not existing_entry:
+                insert_query = "INSERT INTO Cuisine (CuisineType) VALUES (%s)"
+                insert_values = (cuisine_type,)
+                cursor.execute(insert_query, insert_values)
+            else:
+                # Print a message if CuisineType already exists
+                print(f"CuisineType {cuisine_type} already exists.")
+                pass
+    except Exception as e:
+        # Print any exception that occurs during the execution
+        print(e)
+    finally:
+        # Close the database connection
+        conn.close()
+
+# Function to insert data into the Restaurant table with a relationship to Cuisine and Address
+def insert_restaurant_data(restaurant_id, name, cuisine_id, location, contact_number, image_path):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            check_query = "SELECT * FROM Restaurant WHERE RestaurantID = %s"
+            cursor.execute(check_query, (restaurant_id,))
+            existing_entry = cursor.fetchone()
+
+            if not existing_entry:
+                # Check if the specified cuisine_id exists in the Cuisine table
+                check_cuisine_query = "SELECT * FROM Cuisine WHERE CuisineID = %s"
+                cursor.execute(check_cuisine_query, (cuisine_id,))
+                existing_cuisine = cursor.fetchone()
+
+                if existing_cuisine:
+                    # Insert into the Restaurant table with a reference to the Cuisine table
+                    insert_query = "INSERT INTO Restaurant (RestaurantID, Name, CuisineID, Location, ContactNumber, ImagePath) VALUES (%s, %s, %s, %s, %s, %s)"
+                    insert_values = (restaurant_id, name, cuisine_id, location, contact_number, image_path)
+                    cursor.execute(insert_query, insert_values)
+                else:
+                    print(f"CuisineID {cuisine_id} not found.")
+            else:
+                print(f"RestaurantID {restaurant_id} already exists.")
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to insert data into the Feedback table with a direct relationship
+def insert_feedback_data(feedback_id, restaurant_id, user_id, cuisine_id, content, stars):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            check_user_query = "SELECT * FROM User WHERE UserID = %s"
+            cursor.execute(check_user_query, (user_id,))
+            existing_user = cursor.fetchone()
+
+            check_cuisine_query = "SELECT * FROM Cuisine WHERE CuisineID = %s"
+            cursor.execute(check_cuisine_query, (cuisine_id,))
+            existing_cuisine = cursor.fetchone()
+
+            if existing_user and existing_cuisine:
+                check_query = "SELECT * FROM Feedback WHERE FeedbackID = %s"
+                cursor.execute(check_query, (feedback_id,))
+                existing_entry = cursor.fetchone()
+
+                if not existing_entry:
+                    # Insert into the Feedback table with references to the Restaurant, User, and Cuisine tables
+                    insert_query = "INSERT INTO Feedback (FeedbackID, RestaurantID, UserID, CuisineID, Content, Stars) VALUES (%s, %s, %s, %s, %s, %s)"
+                    insert_values = (feedback_id, restaurant_id, user_id, cuisine_id, content, stars)
+                    cursor.execute(insert_query, insert_values)
+                else:
+                    print(f"FeedbackID {feedback_id} already exists.")
+            else:
+                if not existing_user:
+                    print(f"UserID {user_id} not found.")
+                if not existing_cuisine:
+                    print(f"CuisineID {cuisine_id} not found.")
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to retrieve data from the Restaurant table
+def retrieve_restaurant_data():
+    conn = create_connection() 
+    if conn is None:
+        return None
+
+    try:
+        with conn.cursor() as cursor:
+            retrieve_query = "SELECT * FROM restaurant"
+            cursor.execute(retrieve_query)
+            results = cursor.fetchall()
+        print(results)
+        return results
+    except Exception as e:
+        print(f"Error retrieving restaurant data: {e}")
+        return None
+    finally:
+        conn.close()
+
+        # Placeholder for Update Operation
+
+# Function to update data in a table
+def update_data(table_name, set_column, set_value, where_column, where_value):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            update_query = f"UPDATE {table_name} SET {set_column} = %s WHERE {where_column} = %s"
+            update_values = (set_value, where_value)
+            cursor.execute(update_query, update_values)
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to search data in a table
+def search_data(table_name, criteria):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            search_query = f"SELECT * FROM {table_name} WHERE {criteria}"
+            cursor.execute(search_query)
+            results = cursor.fetchall()
+        return results
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function for user authentication
+def authenticate_user(username, password):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            auth_query = "SELECT * FROM User WHERE Username = %s"
+            cursor.execute(auth_query, (username,))
+            user_data = cursor.fetchone()
+
+            if user_data:
+                hashed_password = user_data['Password']
+                if bcrypt.checkpw(password.encode('utf-8'), hashed_password):
+                    return True
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+    return False
+
+# Function to get user profile
+def get_user_profile(user_id):
+    conn = create_connection()
+    try:
+        with conn.cursor() as cursor:
+            profile_query = "SELECT * FROM User WHERE UserID = %s"
+            cursor.execute(profile_query, (user_id,))
+            user_profile = cursor.fetchone()
+        return user_profile
+    except Exception as e:
+        print(e)
+    finally:
+        conn.close()
+
+# Function to validate the user
+# Updated validate_input function
+def insert_user_data(user_id, username, password, email):
+    # Check if user_id is not an integer
+    if not isinstance(user_id, int):
+        return "Error: Invalid user ID data type."
+
+    conn = create_connection()
+    if conn is None:
+        return "Error: Database connection failed."
+
+    try:
+        # Validate other input data
+        if not isinstance(username, str) or not isinstance(password, str) or not isinstance(email, str):
+            return "Error: Invalid data type for username, password, or email."
+
+        with conn.cursor() as cursor:
+            # Check if user already exists
+            check_query = "SELECT * FROM User WHERE UserID = %s"
+            cursor.execute(check_query, (user_id,))
+            existing_entry = cursor.fetchone()
+
+            if not existing_entry:
+                # Insert user data
+                hashed_password = hash_password(password)
+                insert_query = "INSERT INTO User (UserID, Username, Password, Email) VALUES (%s, %s, %s, %s)"
+                cursor.execute(insert_query, (user_id, username, hashed_password, email))
+                return "User data inserted successfully."
+            else:
+                return "UserID already exists."
+    except Exception as e:
+        return f"Error: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route("/")
+def index():
+    results = retrieve_restaurant_data()
+    print("Retrieved results:", results)  # Debug print
+    if results is None:
+        results = []  # Set to an empty list if there's an error
+    return render_template('restraunt.html', data=results)
+
+    # Insert sample data into the User and Cuisine tables
+    insert_user_data(1, 'user1', 'password1', 'user1@example.com')
+    insert_user_data(2, 'user2', 'password2', 'user2@example.com')
+    insert_user_data(3, 'user3', 'password3', 'user3@example.com')
+    insert_user_data(4, 'user4', 'password4', 'user4@example.com')
+
+    #insert_cuisine_data('Pub Style')
+    #insert_cuisine_data('Spain and the Mediterranean')
+    #insert_cuisine_data('Bar Style')
+    #insert_cuisine_data('Cafe')
+
+    # Insert sample data into the Restaurant table
+    insert_restaurant_data(1, 'Example Deli', 1, 'Example St., City', '1234567890', 'example1.png')
+    insert_restaurant_data(2, 'Example Cafe', 2, '123 Example Ave, City, State ZIP', '12345', 'example2.png')
+    insert_restaurant_data(3, 'Example Bistro', 3, '456 Another Rd, City, State ZIP', '987654321', 'example3.png')
+
+    # Insert sample data into the Review and Rating tables
+    insert_feedback_data(1, 1, 1, 1, 'Great place!', 5)
+    insert_feedback_data(2, 2, 1, 1, 'Nice ambiance', 4)
+    insert_feedback_data(3, 3, 2, 1, 'Good food, but service could be better', 3)
+    insert_feedback_data(4, 4, 1, 1, 'Awesome pub!', 5)
+    insert_feedback_data(5, 5, 3, 1, 'Love the bar style', 4)
+    insert_feedback_data(6, 6, 4, 1, 'Cozy cafe, recommended!', 5)
+
+
+    # Retrieve data from the Restaurant table
+    results = retrieve_restaurant_data()
+
+    return render_template('restraunt.html', data=results)
+
+def run_tests():
+    print("Running tests...")
+
+    # Test database connection
+    conn = create_connection()
+    if conn is None:
+        print("Failed to connect to the database.")
+        return
+    else:
+        print("Database connection successful.")
+
+    # Test inserting a user
+    test_user_id = 999  # Use a unique ID to avoid conflicts
+    response = insert_user_data(test_user_id, 'testuser', 'password', 'test@example.com')
+    if response and "successfully" in response.lower():
+        print("User insertion test passed.")
+    else:
+        print(f"User insertion test failed: {response}")
+
+    # Test inserting a user with existing ID
+    response = insert_user_data(test_user_id, 'testuser', 'password', 'test@example.com')
+    if response and "already exists" in response.lower():
+        print("User insertion with existing ID test passed.")
+    else:
+        print("User insertion with existing ID test failed.")
+
+    # Test inserting a cuisine
+    test_cuisine = 'Test Cuisine'
+    insert_cuisine_data(test_cuisine)
+    print("Cuisine insertion test passed.")
+
+    # Test inserting a restaurant
+    test_restaurant_id = 999
+    response = insert_restaurant_data(test_restaurant_id, 'Test Restaurant', 1, 'Test Location', '1234567890', 'test.png')
+    if response is None:
+        print("Restaurant insertion test passed.")
+    else:
+        print(f"Restaurant insertion test failed: {response}")
+
+    # Edge case: Insert user with invalid data
+    response = insert_user_data('invalid_id', 123, 'password', 'email@example.com')
+    if response is not None and "error" in response.lower():
+        print("User insertion with invalid data test passed.")
+    else:
+        print("User insertion with invalid data test failed.")
+
+    # Test inserting a cuisine
+    test_cuisine = 'Test Cuisine'
+    insert_cuisine_data(test_cuisine)
+    print("Cuisine insertion test passed.")
+
+    # Edge case: Insert cuisine with a long name
+    long_cuisine_name = 'x' * 300  # 300 characters long
+    insert_cuisine_data(long_cuisine_name)
+    print("Cuisine insertion with long name test passed.")
+
+    # Test inserting a restaurant
+    test_restaurant_id = 999
+    response = insert_restaurant_data(test_restaurant_id, 'Test Restaurant', 1, 'Test Location', '1234567890', 'test.png')
+    if response is None:
+        print("Restaurant insertion test passed.")
+    else:
+        print(f"Restaurant insertion test failed: {response}")
+
+    # Edge case: Insert restaurant with invalid CuisineID
+    response = insert_restaurant_data(test_restaurant_id, 'Test Restaurant', 'invalid_cuisine_id', 'Test Location', '1234567890', 'test.png')
+    if "error" in response.lower():
+        print("Restaurant insertion with invalid CuisineID test passed.")
+    else:
+        print("Restaurant insertion with invalid CuisineID test failed.")
+
+    # Clean up test data
+    remove_user_data(test_user_id)
+    print("Clean up completed.")
+
+if __name__ == '__main__':
+    initialize_database()
+    run_tests()
+    app.run(port=5000, debug=True)
+
