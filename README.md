@@ -1,6 +1,6 @@
 **Advanced Implementation of Restaurants Database Management System**
 
-This project was undertaken as part with the primary objective of demonstrating a deep understanding of database design and development processes. The project involved conceptualizing a sample application requiring complex data interactions, designing its database using ERD in Crow’s Foot Notation, and implementing the database with Python scripts, ensuring adherence to normalization principles.The system was developed to manage various aspects of restaurants, including cuisine types, user feedback, and restaurant details. The primary objective was to demonstrate an in-depth understanding of database design and development processes, with a focus on Python and SQL integration using Flask and PyMySQL.
+This project was undertaken with the primary objective of demonstrating a deep understanding of database design and development processes ** only focusing on back-end stuff**. The project involved conceptualizing a sample application requiring complex data interactions, designing its database using ERD in Crow’s Foot Notation, and implementing the database with Python scripts, ensuring adherence to normalization principles. The system was developed to manage various aspects of restaurants, including cuisine types, user feedback, and restaurant details. The primary objective was to demonstrate an in-depth understanding of database design and development processes, with a focus on Python and SQL integration using Flask and PyMySQL.
 
 Project Duration:
 September 2023 - December 2023
