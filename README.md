@@ -1,4 +1,4 @@
-# Advanced-Database-Design-and-Implementation
+**Advanced Implementation of Restaurants Database Management System**
 
 This project was undertaken as part with the primary objective of demonstrating a deep understanding of database design and development processes. The project involved conceptualizing a sample application requiring complex data interactions, designing its database using ERD in Crow’s Foot Notation, and implementing the database with Python scripts, ensuring adherence to normalization principles.
 
